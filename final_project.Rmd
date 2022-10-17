@@ -1,0 +1,338 @@
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+knitr::opts_chunk$set(fig.width=80, fig.height=40,out.width =70 ,fig.align = "center") 
+```
+
+## 1 create a tibble 
+```{r}
+# load the data 
+
+library(tidyverse)
+train_df <- read_csv("historic_property_data.csv", show_col_types = FALSE)
+test_df <- read_csv("predict_property_data.csv",show_col_types = FALSE)
+pid <- subset(test_df, select = pid)
+# first six rows 
+head(train_df)
+head(test_df)
+
+# number of rows and columns 
+dim(train_df)
+nrow(train_df)
+ncol(train_df)
+
+# column names 
+names(df)
+train_df
+
+# variable type 
+str(train_df)
+pid
+```
+
+## Missing values
+```{r}
+sum(is.na(select_if(train_df, is.numeric)))
+sum(is.na(select_if(test_df, is.numeric)))
+sum(is.na(select_if(train_df, is.character)))
+sum(is.na(select_if(test_df, is.character)))
+```
+
+
+```{r}
+#Percentage of missing values in each column for train & test data
+train_df %>% 
+   summarise_each(funs(100*mean(is.na(.))))
+test_df %>% 
+   summarise_each(funs(100*mean(is.na(.))))
+
+```
+#We can see the columns "meta_cdu", "char_apts","char_tp_dsgn", char_attic_fnsh",  "char_renovation", "char_porch" have >50% missing values, hence we omit them.
+###  Omit columns with > 50% missing values
+```{r}
+train_df <- train_df[, which(colMeans(!is.na(train_df)) > 0.5)]
+test_df <- test_df[, which(colMeans(!is.na(test_df)) > 0.5)]
+#We also remove variables not relevant by referring to the content from codebook
+test_df <- subset(test_df, select = -c(char_tp_dsgn ,char_site, char_cnst_qlty, char_repair_cnd))
+train_df <- subset(train_df, select = -c(char_site,char_cnst_qlty, char_repair_cnd))
+head(train_df)
+head(test_df)
+```
+
+### Categorize numerical and categorical datatype columns
+```{r}
+sapply(train_df,class)
+#We can see a few logical columns, before analysis we convert them to numeric
+cols <- sapply(train_df, is.logical)
+train_df[,cols] <- lapply(train_df[,cols], as.numeric)
+#Test
+cols <- sapply(test_df, is.logical)
+test_df[,cols] <- lapply(test_df[,cols], as.numeric)
+#Converting character to as.factor
+cols <- sapply(train_df, is.character)
+train_df[,cols] <- lapply(train_df[,cols], as.factor)
+cols <- sapply(train_df, is.factor)
+train_df[,cols] <- lapply(train_df[,cols], as.numeric)
+#test
+cols <- sapply(test_df, is.character)
+test_df[,cols] <- lapply(test_df[,cols], as.factor)
+cols <- sapply(test_df, is.factor)
+test_df[,cols] <- lapply(test_df[,cols], as.numeric)
+head(train_df)
+head(test_df)
+sapply(train_df,class)
+sapply(test_df,class)
+```
+```{r}
+##Handling missing values, we replace numeric missing values with median
+train_df %>% mutate_if(is.numeric, funs(replace(.,is.na(.), median(., na.rm = TRUE)))) 
+test_df %>% mutate_if(is.numeric, funs(replace(.,is.na(.), median(., na.rm = TRUE)))) 
+test_df <- subset(test_df, select= -pid)
+head(test_df)
+
+```
+
+
+```{r}
+#Omit the rest of the missing values
+train_df[is.na(train_df)] <- 0
+test_df[is.na(test_df)] <- 0
+sum(is.na(select_if(train_df, is.numeric)))
+sum(is.na(select_if(test_df, is.numeric)))
+sum(is.na(select_if(train_df, is.factor)))
+sum(is.na(select_if(test_df, is.factor)))
+colnames = colnames(select_if(train_df, is.character))
+colnames
+cat_df <- subset(train_df, select = colnames)
+head(cat_df)
+
+```
+```{r}
+#library('caret')
+#install.packages("metan")
+#library(metan)
+install.packages("ggcorrplot")                      
+library("ggcorrplot") 
+ggcorrplot(cor(select_if(train_df, is.numeric)))  
+#corr1 <- corr_coef(select_if(train_df, is.numeric))
+
+```
+
+
+#Checking the skewnewss of categorical data
+```{r}
+library(ggplot2)
+ggplot(train_df, aes(x=meta_deed_type)) +
+  geom_bar(width=0.5)
+ggplot(train_df, aes(x=geo_property_city)) +
+  geom_bar(width=0.5)
+ggplot(train_df, aes(x=geo_property_zip)) +
+  geom_bar(width=0.5)
+ggplot(train_df, aes(x=geo_fips)) +
+  geom_bar(width=0.5)
+ggplot(train_df, aes(x=geo_municipality)) +
+  geom_bar(width=0.5)
+ggplot(train_df, aes(x=geo_school_elem_district)) +
+  geom_bar(width=0.5)
+ggplot(train_df, aes(x=geo_school_hs_district)) +
+  geom_bar(width=0.5)
+
+```
+
+```{r}
+#From the bar plot distribution, we can see that column "meta_deed_type" has a lot of skewness distributed to one value. hence we omit the column
+test_df <- subset(test_df, select = -c(meta_deed_type,geo_municipality) )
+train_df <- subset(train_df, select = -c(meta_deed_type,geo_municipality))
+#We can also see skewness to one value in columns geo_property_city,geo_fips, geo_municipality. 
+getmode <- function(v){
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+getmode(train_df$geo_property_city)
+getmode(train_df$geo_fips)
+getmode(train_df$geo_municipality)
+
+getmode(test_df$geo_property_city)
+getmode(test_df$geo_fips)
+getmode(test_df$geo_municipality)
+
+# We group the variables with less than 500 observations in geo_property_city to "Distinct"
+geo_prop_city <- train_df %>%group_by(geo_property_city) %>% summarize(number=n())
+length(unique(train_df[["geo_property_city"]]))
+city_new <- geo_prop_city$geo_property_city[geo_prop_city$number<500]
+train_df$geo_property_city[train_df$geo_property_city %in% city_new] <- "Distinct"
+
+# We group the variables with less than 500 observations in geo_property_zip to "Distinct"
+geo_prop_zip <- train_df %>% group_by(geo_property_zip) %>% summarize(number=n())
+zip_new <- geo_prop_zip$geo_property_zip[geo_prop_zip$number<500]
+train_df$geo_property_zip[train_df$geo_property_zip %in% zip_new] <- "Distinct"
+
+
+# Group the variables with less than 500 observations in geo_fips to "Distinct"
+geo_prop_fips <- train_df %>% group_by(geo_fips) %>% summarize(number=n())
+fips_new <- geo_prop_fips$geo_fips[geo_prop_fips$number<500]
+length(unique(train_df[["geo_fips"]]))
+train_df$geo_fips[train_df$geo_fips %in% fips_new] <- "Distinct"
+
+
+#testdataset
+geo_prop_fips <- test_df %>% group_by(geo_fips) %>% summarize(number=n())
+fips_test <- geo_prop_fips$geo_fips[geo_prop_fips$number<500]
+test_df$geo_fips[test_df$geo_fips %in% fips_test] <- "Distinct"
+
+geo_prop_city <- test_df %>%group_by(geo_property_city) %>% summarize(number=n())
+city_test <- geo_prop_city$geo_property_city[geo_prop_city$number<500]
+test_df$geo_property_city[test_df$geo_property_city %in% city_test] <- "Distinct"
+
+
+# We group the variables with less than 500 observations in geo_property_zip to "Distinct"
+geo_prop_zip <- test_df %>% group_by(geo_property_zip) %>% summarize(number=n())
+zip_test <- geo_prop_zip$geo_property_zip[geo_prop_zip$number<500]
+test_df$geo_property_zip[test_df$geo_property_zip %in% zip_test] <- "Distinct"
+
+
+#Converting character to as.factor
+cols <- sapply(train_df, is.character)
+train_df[,cols] <- lapply(train_df[,cols], as.factor)
+cols <- sapply(train_df, is.factor)
+train_df[,cols] <- lapply(train_df[,cols], as.numeric)
+#test
+cols <- sapply(test_df, is.character)
+test_df[,cols] <- lapply(test_df[,cols], as.factor)
+cols <- sapply(test_df, is.factor)
+test_df[,cols] <- lapply(test_df[,cols], as.numeric)
+head(train_df)
+head(test_df)
+
+
+
+```
+
+## Run linear regression to check less significant variables (time = 1min)
+
+
+```{r}
+set.seed(1)
+train.index <- sample(c(1:dim(train_df)[1]), dim(train_df)[1]*0.8)
+# 
+# # We create train and test data
+train_data <- train_df[train.index,]
+test_data <- train_df[-train.index,]
+train_data
+test_data
+```
+
+
+```{r}
+lm_model <- lm(sale_price ~ ., data = train_df)
+summary(lm_model)
+
+pred_lm <- predict(lm_model,test_data)
+summary(pred_lm)
+lm_mse <- mean((test_data$sale_price-pred_lm)^2)
+lm_mse
+
+
+```
+
+
+```{r}
+vars <- summary(lm_model)$coefficients[-1,4] < 0.05
+vars <- names(summary(lm_model)$coefficients[-1,4])[vars == TRUE]
+vars
+train_df1 <- subset(train_df, select = vars)
+train_df2 <- subset(train_df, select = sale_price)
+train_df_final <- cbind(train_df2, train_df1 )
+
+```
+```{r}
+
+ # use step() to run stepwise regression  (time - 20min) 
+lm.step.both <- step(lm_model, direction = "both") # takes time
+
+summary(lm.step.both) 
+
+# # make predictions on the test set
+lm.step.pred.both <- predict(lm.step.both, test_data)
+head(lm.step.pred.both)
+
+# # MSE in the test set 
+stepwise_mse<-mean((test_data$sale_price-lm.step.pred.both)^2)
+stepwise_mse
+```
+#Lasso regression - time (2min)
+
+```{r}
+library(glmnet)
+x <- model.matrix(sale_price ~ ., data = train_df)
+y <- train_df$sale_price
+fit <- glmnet(x=x,y=y,alpha=1)
+fit$lambda
+plot(fit, xvar="lambda")
+lasso_model <- cv.glmnet(x,y,alpha=1, type.measure="mse", nfold=10)
+coef_lambda_best<- predict(lasso_model,s=lasso_model$lambda.min,type="coefficients")
+model_lasso_test <- model.matrix(sale_price ~ ., data = test_data)
+pred.lambda.best <- predict(cv.lasso_model,s=lasso_model$lambda.min,newx=model_lasso_test)
+lasso_pred <- predict(fit, newx = model_lasso_test)
+summary(lasso_pred)
+lasso_mse <- mean((test_data$sale_price - lasso_pred)^2)
+lasso_mse
+```
+#Random forest - (1hr)
+
+```{r}
+library(randomForest)
+rf_model <- randomForest(sale_price ~ ., data = train_df_final, max_depth =8,mtry=8,importance=TRUE, ntree=500)
+summary(rf_model)
+```
+
+```{r}
+
+set.seed(1)
+train.index <- sample(c(1:dim(train_df_final)[1]), dim(train_df_final)[1]*0.8)
+# 
+# # We create train and test data
+train_data <- train_df_final[train.index,]
+test_data <- train_df_final[-train.index,]
+train_data
+test_data
+
+rf_pred <- predict(rf_model,test_data)
+summary(rf_pred)
+rf_mse <- mean((test_data$sale_price - rf_pred)^2)
+rf_mse
+
+```
+```{r}
+importance(rf_model)
+
+varImpPlot(rf_model)
+```
+#Boosting - time (10min)
+
+```{r}
+library(boot)
+install.packages("gbm")
+library(gbm)
+set.seed(1)
+boosting_model <- gbm(sale_price ~ ., data = train_df_final,distribution ="gaussian", interaction.depth = 4)
+summary(boosting_model)
+
+boosting_pred <- predict(boosting_model,test_data)
+summary(boosting_pred)
+boosting_mse <- mean((test_data$sale_price - boosting_pred)^2)
+boosting_mse
+
+```
+
+
+```{r}
+
+# Create the output the result to csv file
+pred_result <- data.frame(pid=pid$pid, assessed_value=rf_pred)
+head(pred_result)
+summary(pred_result$assessed_value)
+
+# Export predicting results
+write.csv(pred_result, "assessed_value.csv", row.names = FALSE)
+```
