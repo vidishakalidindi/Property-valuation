@@ -22,7 +22,7 @@ To analyzethe data further, we consideredchecking the skewness for all the categ
 Modeling: 
 
 We have used the following methods to estimate the sale price.
-We convert all categoricalvariablesto factor data typea.
+We convert all categorical variables to factor data types.
 
 Linear Regression:
 
